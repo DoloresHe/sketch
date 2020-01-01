@@ -60,13 +60,13 @@ class ForgotPasswordController extends Controller
 
 //重写了validator,为了规范返回格式
        $validator = Validator::make($request->all(), [
-        'email' => 'required|email|email'
+        'email' => 'required|email'
     ]);
     if ($validator->fails()) {
         $data = [
             "message"=> "validation failed"
        ];
-        abort(422,json_encode($data));
+       return response()->error($data, 422);
     }
 
         $user_check = User::where('email', $request->email)->first();
@@ -75,19 +75,18 @@ class ForgotPasswordController extends Controller
         ];
 //该邮箱账户不存在
         if (!$user_check) {        
-
-            abort(404,($data));
+            return response()->error($data, 404);
         }
 //当日注册的用户不能重置密码
-        if ($user_check->created_at > Carbon::now()->subDay(1)){     
+        if ($user_check->created_at>Carbon::now()->subDay()){     
 
-            abort(403,($data));
+            return response()->error($data, 409);
         }
 
         $email_check = DB::table('password_resets')->where('email', $request->email)->first();
 //该邮箱12小时内已发送过重置邮件。请不要重复发送邮件，避免被识别为垃圾邮件。 这个应该可以放到redis里面
         if ($email_check&&$email_check->created_at>Carbon::now()->subHours(12)){
-            abort(403);
+            return response()->error($data, 409);
         }
 
         $response = $this->broker()->sendResetLink(
@@ -96,11 +95,8 @@ class ForgotPasswordController extends Controller
 
    //     Cache::put('reset-password-limit-' . request()->ip(), true, 60);
 
-   return response()->success($response) ;
-//    == Password::RESET_LINK_SENT
-//    ? $this->sendResetLinkResponse($response)
-//    : $this->sendResetLinkFailedResponse($request, $response);
-        // ? response()->success(($data))
-        // : response()->error(config('error.595'), 595);
+        return $response == Password::RESET_LINK_SENT
+        ? response()->success(($data))
+        : response()->error(config('error.595'), 595);
     }
 }
